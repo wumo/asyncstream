@@ -1,13 +1,10 @@
 package lab.mars.util.async;
 
 import lab.mars.util.async.action.*;
-import org.jctools.queues.MpscLinkedQueue7;
-import org.jctools.queues.MpscLinkedQueue8;
-import org.jctools.util.UnsafeAccess;
+import org.jctools.queues.QueueFactory;
 
 import java.util.Collection;
 import java.util.Queue;
-import java.util.function.Supplier;
 
 /**
  * Created by haixiao on 2015/3/20.
@@ -20,7 +17,6 @@ import java.util.function.Supplier;
  * <b>Note: This class provides static insertion order for inner async actions. only outermost async can add dynamic actions!! </b>
  */
 public class AsyncStream extends AsyncStreamAtomicRef {
-    private static final Supplier<Queue> newQueue = UnsafeAccess.SUPPORTS_GET_AND_SET ? MpscLinkedQueue8::new : MpscLinkedQueue7::new;
     /*
      *实现的具体细节：
      * 主要的数据结构是2个无锁MPSC队列，一个存储接收到的event，一个存储注册的handler；
@@ -29,9 +25,9 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      */
     private static final EndAction END = () -> {};
     private static final Object NULL = new Object();
-    private Queue<Object> events = newQueue.get();
-    private Queue<Action> chain = newQueue.get();
-    private Queue<EndAction> whenEndChain = newQueue.get();
+    private Queue<Object> events = QueueFactory.newUnboundedMpsc();
+    private Queue<Action> chain = QueueFactory.newUnboundedMpsc();
+    private Queue<EndAction> whenEndChain = QueueFactory.newUnboundedMpsc();
 
     private ExceptionHandler exceptionHandler = null;
 
