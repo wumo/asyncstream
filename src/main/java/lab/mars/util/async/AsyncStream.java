@@ -30,19 +30,18 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     private static final EndAction END = () -> {};
     private static final Object NULL = new Object();
     private Queue<Object> events = newQueue.get();
-    private Queue<Action> chain =newQueue.get();
+    private Queue<Action> chain = newQueue.get();
     private Queue<EndAction> whenEndChain = newQueue.get();
 
-    /** 表示是否需要一个异步事件来触发后续handler的执行 */
-    private volatile boolean canInstantActionExecute;
     private ExceptionHandler exceptionHandler = null;
+
 
     /**
      * @param isInstant
      *         true if no need to wait for one event to trigger engine processing
      */
     private AsyncStream(boolean isInstant) {
-        this.canInstantActionExecute = isInstant;
+        this.set_awaitMode(isInstant ? INSTANT : DEFERRED);
         this.set_tick_mutex(false);
         this.set_chainClosed(false);
     }
@@ -60,7 +59,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     }
 
     /**
-     * deferred to wait for one async event to happen
+     * DEFERRED to wait for one async event to happen
      */
     public static AsyncStream deferredAsync() {return new AsyncStream(false);}
 
@@ -202,7 +201,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         } else
             chain.add(typedAction);
 
-        this.tick();//tick executed here is for instant actions or provided events.
+        this.tick();//tick executed here is for INSTANT actions or provided events.
     }
 
     /**
@@ -232,29 +231,21 @@ public class AsyncStream extends AsyncStreamAtomicRef {
             e.printStackTrace();
     }
 
-	/*
-     *有两个时机可以推动处理进程：
-	 * 添加action，
-	 * OnEvent
-	 * 而这两个可能处在不同的线程中，他们修改的是相同的events队列和chain队列，所以需要处理好同时修改的问题。
-	 * handleEngine，由此引擎不断处理events中的事件，此引擎可能“走走停停”，问题的关键是，能不能保证停了能被唤醒，或者停的是时候吗？
-	 * 唤醒引擎只有两个时机：
-	 * 1.添加action时：
-	 * 2.onEvent时：
-	 *
-	 * 保证events队列和chain队列的逻辑正确性：
-	 * 1.events中移除的事件必须要有action处理，否则不能移除（即不允许先移除，发现没action处理，再重新添加回头部的情况），所有新的事件的添加都是添加到尾部
-	 * 2.chain中移除action也同样是确定此action不会呆在chain中了才移除（即不允许先移除，发现还要呆在chain中，再重新添加回头部的情况，特指loop）
-	 * 3.action前面有action时，它是不会处理events的，即使events不为空（当然这是不可能的，只是指出以前的判断方式有点不妥）
-	 * 4.chain中存在action的只可能是events为空的情况下，否则只要events中存在event，那么如果chain中还有action，就一定会处理的，直至chain中为空（这时events中可能不为空）或者events中为空
-	 *
-	 * 可能onEvent和添加action同时推动处理进程，由于是无锁的，这时需要处理好同时处理的逻辑，即允许“处理到一半的状态的一致性修复”
-	 */
-
+    /**
+     * 这里表示在awaitMode==AWAIT期间，不接受新event的缓存（也可以设计成可以缓
+     * 存event，但意义也许不明，且实现要麻烦一点），如果不缓存，只要用户可以在调
+     * 用CollecFunction之前没有缓存event那么CollectFunction之后的then都是用的最
+     * 新的从CollectFunction返回的event。不禁止的话，就无法保证这点。
+     */
+    /*onEvent方法会在多线程中调用，而tick方法由tick_mutex保护，仅由一个线程执行*/
     public final void onEvent(Object event) {
-        if (isEnd()) return;
-        this.canInstantActionExecute = true;//必须在event添加至事件队列前设置（原因是:events队列不为空就意味着canInstantActionExecute = true，为了保证这点就必须保证此语句的先执行）
-        this.events.add(event == null ? NULL : event);//cache events if not end
+        if (isEnd() || get_awaitMode() == AWAIT) return;
+        this.events.add(event == null ? NULL : event);
+        if (this.get_awaitMode() == DEFERRED)
+            //此CAS操作的cost仅在初始情况下发生一次。
+            //此处使用CAS更新awaitMode的原因是，如果不是cas，那么设置instant的操作
+            // 可以无限阻塞（意思是可以之后随时执行），这会使得WhenAction中设置awaitMode=AWAIT无效化。
+            this.cas_awaitMode(DEFERRED, INSTANT);
         this.tick();
     }
 
@@ -262,38 +253,18 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      * 提交空事件，用来触发instantAction而不用压入额外的事件。
      */
     public final void onEvent() {
-        if (isEnd()) return;
-        this.canInstantActionExecute = true;
+        if (isEnd() || get_awaitMode() == AWAIT) return;
+        if (this.get_awaitMode() == DEFERRED)
+            this.cas_awaitMode(DEFERRED, INSTANT);
         this.tick();
-    }
-
-    /**
-     * 当条件满足时，当前线程让出tick_mutex
-     *
-     * @param condition
-     *         让出tick_mutex的条件
-     * @return true则让出tick函数的执行权;false则不让出。
-     */
-    private boolean tick_mutex_release_condition_satisfied(Supplier<Boolean> condition) {
-        while (true) {
-            if (condition.get()) {
-                set_tick_mutex(false);
-                if (condition.get())
-                    return true;
-                else if (!cas_tick_mutex(false, true))
-                    return true;
-                else
-                    continue;
-            }
-            return false;
-        }
     }
 
     @SuppressWarnings("unchecked")
     private void tick() {
-        //mutex isOn is to guarantee only one thread will enter the tick function at the same time
-        //the process only need one thread.
-        if (!cas_tick_mutex(false, true))
+        /**因为所有情况下只有一个tick_mutex==true，而cas_tick_mutex操作要比get_tick_mutex()
+         * 更加费时，所以对于大部分false的情况下，先用get_tick_mutex预先进行条件短路
+         * 可以提高效率*/
+        if (get_tick_mutex() || !cas_tick_mutex(false, true))
             return;
 
         while (true) {
@@ -304,7 +275,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
             assert action != null;
             //InstantAction doesn't need to wait for events
             if (action instanceof InstantAction) {
-                if (tick_mutex_release_condition_satisfied(() -> !canInstantActionExecute))
+                if (tick_mutex_release_condition_satisfied(() -> get_awaitMode() != INSTANT))
                     return;
                 if (action == END) {//proceed to end action, gonna finish
                     while (!tick_mutex_release_condition_satisfied(whenEndChain::isEmpty)) {
@@ -343,8 +314,8 @@ public class AsyncStream extends AsyncStreamAtomicRef {
                         this.events.add(result == null ? NULL : result);//将返回的结果加入到事件队列的尾端
                     break;
                 case WhenAction:
-                    this.canInstantActionExecute = false;//此语句先执行的原因是：下面的WhenAction可能立即返回，这时是可以继续继续执行的
-                    ((WhenAction) action).run(this);//就用当前Async不会有问题，因为WhenAction回调前，此Async不会变更的，但是需要防止后续InstantAction执行。
+                    this.set_awaitMode(AWAIT);
+                    ((WhenAction) action).run(this::awakeMe);
                     break;
                 default:
                     break;
@@ -387,12 +358,17 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         }
     }
 
+    //awakeMe方法可能在另一线程中调用，但由于WhenAction或awaitAsync的语义使
+    // 得不同的设置awaitMode之间存在happen-before关系，所以正确性并无问题
+    private void awakeMe(Object returnFromAnotherAsync) {
+        if (returnFromAnotherAsync != null)
+            this.events.add(returnFromAnotherAsync);//这里不判断NULL对象的使用是因为，如果是从awaitAsync返回，则NULL已经处理，另一种会返回的只有CollectFunction，它只返回数组，所以也不用判断
+        this.set_awaitMode(INSTANT);//必须在event添加之后设置，否则中间过程可能夹杂其他事件，不能保证最新
+        this.onEvent();
+    }
+
     private void awaitAsync(AsyncStream anotherAsync) {
-        this.canInstantActionExecute = false;//需要等待内部async的事件到来才可执行InstantAction
-        anotherAsync.then(() -> {
-            Object returnedEvent = anotherAsync.events.poll();
-            if (returnedEvent == null) this.onEvent();
-            else this.onEvent(returnedEvent);
-        }).end();//内部Async不再添加新的handler
+        this.set_awaitMode(AWAIT);
+        anotherAsync.then(() -> this.awakeMe(anotherAsync.events.poll())).end();//内部Async不再添加新的handler
     }
 }

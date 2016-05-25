@@ -4,6 +4,7 @@ import lab.mars.util.async.AsyncStream;
 
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Created by haixiao on 8/6/2015.
@@ -16,7 +17,7 @@ public class CollectFunction_Collection implements WhenAction {
         this.asyncs = asyncs;
     }
 
-    public void run(AsyncStream callback) {
+    public void run(Consumer awakeFunc) {
         AtomicInteger count = new AtomicInteger(0);
         int size = asyncs.size();
         Object[] result = new Object[size];
@@ -27,7 +28,7 @@ public class CollectFunction_Collection implements WhenAction {
                 result[_i] = e;
                 int last = count.incrementAndGet();
                 if (last == size) {//the last one to execute
-                    callback.onEvent(result);
+                    awakeFunc.accept(result);
                 }
             }).end();
         }

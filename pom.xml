@@ -6,8 +6,8 @@
 
     <groupId>lab.mars</groupId>
     <artifactId>asyncstream</artifactId>
-    <version>1.0-SNAPSHOT</version>
-
+    <version>4.0.0</version>
+    <packaging>bundle</packaging>
 
     <properties>
         <jctools-core.version>1.2</jctools-core.version>
@@ -24,7 +24,7 @@
     </properties>
         <dependencies>
             <dependency>
-                <groupId>org.jctools</groupId>
+                <groupId>lab.mars</groupId>
                 <artifactId>jctools-core</artifactId>
                 <version>1.2</version>
             </dependency>
@@ -82,6 +82,25 @@
                         <source>${maven.compiler.source}</source>
                         <target>${maven.compiler.target}</target>
                         <encoding>${project.build.sourceEncoding}</encoding>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.felix</groupId>
+                    <artifactId>maven-bundle-plugin</artifactId>
+                    <version>2.5.4</version>
+                    <extensions>true</extensions>
+                    <configuration>
+                        <instructions>
+                            <Export-Package>
+                                lab.mars.util.async,
+                                lab.mars.util.async.action
+                            </Export-Package>
+                            <Import-Package>
+                                org.jctools.queues,
+                                org.slf4j
+                            </Import-Package>
+                        </instructions>
                     </configuration>
                 </plugin>
             </plugins>

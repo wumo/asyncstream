@@ -1,8 +1,9 @@
 package lab.mars.util.async.action;
 
 import lab.mars.util.async.Actions;
-import lab.mars.util.async.AsyncStream;
 import lab.mars.util.async.InstantAction;
+
+import java.util.function.Consumer;
 
 import static lab.mars.util.async.Actions.WhenAction;
 
@@ -11,7 +12,7 @@ import static lab.mars.util.async.Actions.WhenAction;
  * Email: wumo@outlook.com
  */
 public interface WhenAction extends InstantAction {
-    void run(AsyncStream callback);
+    void run(Consumer awakeFuncWithReturn);
 
     default Actions type() {
         return WhenAction;
