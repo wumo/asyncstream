@@ -54,6 +54,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
                 this.events.add(event == null ? NULL : event);
     }
 
+    //region ...不同的初始化函数
     /**
      * DEFERRED to wait for one async event to happen
      */
@@ -79,9 +80,9 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     public static AsyncStream collectAsync(AsyncStream... asyncs) {
         return instantAsync().collect(asyncs);
     }
+    //endregion
 
-
-    /* --------------------------------------- different async action start-------------------------------------- */
+    //region ...不同的异步操作
     /**
      * thenAction is executed after async event happened (though itself doesn't consume events)
      */
@@ -171,6 +172,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         return this;
     }
 
+
     /**
      * 当此Async结束时调用此action。与{@link AsyncStream#end(EndAction)}类似，但不关闭chain(即{@link AsyncStream#chainClosed()}返回false
      */
@@ -180,7 +182,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         return this;
     }
 
-    /* --------------------------------------- different async action end-------------------------------------- */
+    //endregion
 
     public final boolean chainClosed() {
         return get_chainClosed();

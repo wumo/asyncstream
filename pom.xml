@@ -6,7 +6,7 @@
 
     <groupId>lab.mars</groupId>
     <artifactId>asyncstream</artifactId>
-    <version>4.0.0</version>
+    <version>5.0.0</version>
     <packaging>bundle</packaging>
 
     <properties>
