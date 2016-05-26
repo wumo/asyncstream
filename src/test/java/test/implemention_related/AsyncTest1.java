@@ -63,26 +63,32 @@ public class AsyncTest1 {
     @Setup(Level.Invocation)
     public void setup() {
         asyncStream = AsyncStream.deferredAsync();
-        endLatch = new CountDownLatch(1);
+        endLatch = new CountDownLatch(threadCount);
         startLatch = new CountDownLatch(1);
-        for (int i = 0; i < total; i++) {
-            asyncStream.<Integer>then(e -> {
-                e++;
-            });
-        }
-        asyncStream.end(() -> {
-            endLatch.countDown();
-        });
+//        for (int i = 0; i < total; i++) {
+//            asyncStream.<Integer>then(e -> {
+//                e++;
+//            });
+//        }
+//        asyncStream.end(() -> {
+//            endLatch.countDown();
+//        });
 
         executor = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    int load=total/threadCount;
+                    int load = total / threadCount;
                     startLatch.await();
                     for (int i1 = 0; i1 < load; i1++) {
-                        asyncStream.onEvent(i1);
+                        if (i1 % 2 == 0)
+                            asyncStream.onEvent(i1);
+                        else
+                            asyncStream.<Integer>then(e -> {
+                                e++;
+                            });
                     }
+                    endLatch.countDown();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -93,8 +99,8 @@ public class AsyncTest1 {
     @Benchmark
 //    @Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 //    @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-    @Warmup(iterations = 5, batchSize = 1000)
-    @Measurement(iterations = 5, batchSize = 1000)
+    @Warmup(iterations = 10, batchSize = 1000)
+    @Measurement(iterations = 10, batchSize = 1000)
     @OperationsPerInvocation(1000)
     @BenchmarkMode(Mode.AverageTime)
     public void test() throws InterruptedException {

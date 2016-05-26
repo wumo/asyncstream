@@ -12,9 +12,8 @@ import static org.jctools.util.UnsafeAccess.UNSAFE;
  * 本类的效果就是<code>AtomicBoolean chainClosed,tick_mutex;</code>
  * 只不过为了节省内存空间，使用静态的{@link AtomicIntegerFieldUpdater}统一更新volatile变量，
  * 从而节省2个对象的空间大约32 bytes（内存计算参见http://www.javamex.com/tutorials/memory/object_memory_usage.shtml）。。
- * （增益也许并不大，主要是为了学习AtomicIntegerFieldUpdater的使用）
  */
-@sun.misc.Contended//applicable in Java 8 to avoid False Sharing.
+@sun.misc.Contended//applicable in Java 8 to avoid False Sharing.经测试，好像没什么效果。。。可能因为另两个变量并不会在多线程中多次竞争
 public class AsyncStreamAtomicRef {
     protected final static long chainClosed_OFFSET, tick_mutex_OFFSET, awaitMode_OFFSET;
 
@@ -28,9 +27,9 @@ public class AsyncStreamAtomicRef {
         }
     }
 
-    static final int DEFERRED = 0;
-    static final int INSTANT = 1;
-    static final int AWAIT = 2;
+    protected static final int DEFERRED = 0;
+    protected static final int INSTANT = 1;
+    protected static final int AWAIT = 2;
 
     private volatile int awaitMode;
     private volatile int chainClosed;

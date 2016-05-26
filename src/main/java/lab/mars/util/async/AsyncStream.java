@@ -18,9 +18,9 @@ import java.util.Queue;
  */
 public class AsyncStream extends AsyncStreamAtomicRef {
     /*
-     *实现的具体细节：
-     * 主要的数据结构是2个无锁MPSC队列，一个存储接收到的event，一个存储注册的handler；
-     * 主要的操作是“atomic process events”和“atomic transfer handlers”。
+     *AsyncStream的语义：
+     * AsyncStream表示异步事件处理流。
+     * AsyncStream主要由两个并发队列构成：一个是事件缓存队列；一个是处理器缓存队列。
      *
      */
     private static final EndAction END = () -> {};
@@ -80,6 +80,8 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         return instantAsync().collect(asyncs);
     }
 
+
+    /* --------------------------------------- different async action start-------------------------------------- */
     /**
      * thenAction is executed after async event happened (though itself doesn't consume events)
      */
@@ -177,6 +179,8 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         this.tick();
         return this;
     }
+
+    /* --------------------------------------- different async action end-------------------------------------- */
 
     public final boolean chainClosed() {
         return get_chainClosed();

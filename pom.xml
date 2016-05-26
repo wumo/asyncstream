@@ -10,6 +10,7 @@
     <packaging>bundle</packaging>
 
     <properties>
+        <osgi.version>6.0.0</osgi.version>
         <jctools-core.version>1.2</jctools-core.version>
         <jmh.version>1.12</jmh.version>
         <junit.version>4.11</junit.version>
@@ -18,11 +19,16 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-        <maven.assembly.plugin.version>2.4.1</maven.assembly.plugin.version>
         <maven.compiler.plugin.version>3.1</maven.compiler.plugin.version>
-        <maven.source.plugin.version>2.4</maven.source.plugin.version>
+        <maven.source.plugin.version>3.0.0</maven.source.plugin.version>
+        <maven-bundle-plugin.version>3.0.1</maven-bundle-plugin.version>
     </properties>
         <dependencies>
+            <dependency>
+                <groupId>org.osgi</groupId>
+                <artifactId>org.osgi.core</artifactId>
+                <version>${osgi.version}</version>
+            </dependency>
             <dependency>
                 <groupId>lab.mars</groupId>
                 <artifactId>jctools-core</artifactId>
@@ -88,7 +94,7 @@
                 <plugin>
                     <groupId>org.apache.felix</groupId>
                     <artifactId>maven-bundle-plugin</artifactId>
-                    <version>2.5.4</version>
+                    <version>${maven-bundle-plugin.version}</version>
                     <extensions>true</extensions>
                     <configuration>
                         <instructions>
