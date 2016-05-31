@@ -1,10 +1,9 @@
 package lab.mars.util.async;
 
 import lab.mars.util.async.action.*;
-import org.jctools.queues.QueueFactory;
+import lab.mars.util.async.internal.SpecialQueue;
 
 import java.util.Collection;
-import java.util.Queue;
 
 /**
  * Created by haixiao on 2015/3/20.
@@ -23,11 +22,13 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      * AsyncStream主要由两个并发队列构成：一个是事件缓存队列；一个是处理器缓存队列。
      *
      */
-    private static final EndAction END = () -> {};
-    private static final Object NULL = new Object();
-    private Queue<Object> events = QueueFactory.newUnboundedMpsc();
-    private Queue<Action> chain = QueueFactory.newUnboundedMpsc();
-    private Queue<EndAction> whenEndChain = QueueFactory.newUnboundedMpsc();
+    private static final _Action END = new _Action() {
+        @Override protected void run(AsyncStream asyncStream) {}
+    };
+    static final Object NULL = new Object();
+    private SpecialQueue<Object> events = new SpecialQueue<>();
+    private SpecialQueue<_Action> actions = new SpecialQueue<>();
+    private SpecialQueue<_Action> whenEndChain = new SpecialQueue<>();
 
     private ExceptionHandler exceptionHandler = null;
 
@@ -37,7 +38,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      *         true if no need to wait for one event to trigger engine processing
      */
     private AsyncStream(boolean isInstant) {
-        this.set_awaitMode(isInstant ? INSTANT : DEFERRED);
+        this.set_status(isInstant ? INSTANT : DEFERRED);
         this.set_tick_mutex(false);
         this.set_chainClosed(false);
     }
@@ -48,13 +49,14 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     private AsyncStream(Object[] events) {
         this(true);//at least one event, trigger engine processing
         if (events == null)
-            this.events.add(NULL);
+            addLast(NULL);
         else
             for (Object event : events)
-                this.events.add(event == null ? NULL : event);
+                addLast(event);
     }
 
     //region ...不同的初始化函数
+
     /**
      * DEFERRED to wait for one async event to happen
      */
@@ -83,11 +85,12 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     //endregion
 
     //region ...不同的异步操作
+
     /**
      * thenAction is executed after async event happened (though itself doesn't consume events)
      */
     public final AsyncStream then(ThenAction thenAction) {
-        dynamicAddAction(thenAction);
+        dynamicAddAction(new _ThenAction(thenAction));
         return this;
     }
 
@@ -95,7 +98,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      * thenOnEventAction is executed after async event happened and consume the event
      */
     public final <T> AsyncStream then(ThenOnEventAction<T> thenOnEventAction) {
-        dynamicAddAction(thenOnEventAction);
+        dynamicAddAction(new _ThenOnEventAction(thenOnEventAction));
         return this;
     }
 
@@ -106,17 +109,17 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      */
 
     public final <R> AsyncStream then(ThenFunction<R> thenFunction) {
-        dynamicAddAction(thenFunction);
+        dynamicAddAction(new _ThenFunction(thenFunction));
         return this;
     }
 
     public final <R, T> AsyncStream then(ThenOnEventFunction<R, T> thenOnEventFunction) {
-        dynamicAddAction(thenOnEventFunction);
+        dynamicAddAction(new _ThenOnEventFunction(thenOnEventFunction));
         return this;
     }
 
     public final <T> AsyncStream loop(LoopOnEventAction<T> andLoopAction) {
-        dynamicAddAction(andLoopAction);
+        dynamicAddAction(new _LoopOnEventAction(andLoopAction));
         return this;
     }
 
@@ -125,7 +128,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      */
     public final AsyncStream when(Collection<AsyncStream> asyncs) {
         if (asyncs == null || asyncs.size() == 0) return this;
-        dynamicAddAction(new WhenAction_Collection(asyncs));
+        dynamicAddAction(new _WhenAction_Collection(asyncs));
         return this;
     }
 
@@ -134,7 +137,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      */
     public final AsyncStream when(AsyncStream... asyncs) {
         if (asyncs == null || asyncs.length == 0) return this;
-        dynamicAddAction(new WhenAction_Array(asyncs));
+        dynamicAddAction(new _WhenAction_Array(asyncs));
         return this;
     }
 
@@ -143,7 +146,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      */
     public final AsyncStream collect(Collection<AsyncStream> asyncs) {
         if (asyncs == null || asyncs.isEmpty()) return this;
-        dynamicAddAction(new CollectFunction_Collection(asyncs));
+        dynamicAddAction(new _CollectionFunction_Collection(asyncs));
         return this;
     }
 
@@ -152,7 +155,22 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      */
     public final AsyncStream collect(AsyncStream... asyncs) {
         if (asyncs == null || asyncs.length == 0) return this;
-        dynamicAddAction(new CollectFunction_Array(asyncs));
+        dynamicAddAction(new _CollectionFunction_Array(asyncs));
+        return this;
+    }
+
+    /**
+     * 当此Async结束时调用此action。与{@link AsyncStream#end(ThenAction)}类似，但不关闭chain(即{@link AsyncStream#chainClosed()}返回false
+     */
+    public final AsyncStream whenEnd(ThenAction endAction) {
+        if (endAction != null) whenEndChain.offer(new _ThenAction(endAction));
+        tick();
+        return this;
+    }
+
+    public final <T> AsyncStream whenEnd(ThenOnEventAction<T> endAction) {
+        if (endAction != null) whenEndChain.offer(new _ThenOnEventAction(endAction));
+        tick();
         return this;
     }
 
@@ -167,48 +185,114 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     /**
      * add one end action to indicate the stream is end。
      */
-    public final AsyncStream end(EndAction endAction) {
-        dynamicAddAction(endAction == null ? END : endAction);
+    public final AsyncStream end(ThenAction endAction) {
+        if (endAction != null) whenEndChain.offer(new _ThenAction(endAction));
+        end();
         return this;
     }
 
-
     /**
-     * 当此Async结束时调用此action。与{@link AsyncStream#end(EndAction)}类似，但不关闭chain(即{@link AsyncStream#chainClosed()}返回false
+     * add one end action to indicate the stream is end。
      */
-    public final AsyncStream whenEnd(EndAction endAction) {
-        if (endAction != null) whenEndChain.add(endAction);
-        this.tick();
+    public final <T> AsyncStream end(ThenOnEventAction<T> endAction) {
+        if (endAction != null) whenEndChain.offer(new _ThenOnEventAction(endAction));
+        end();
         return this;
     }
 
     //endregion
+
+    @CalledByMultiThreads
+    private void dynamicAddAction(_Action typedAction) {
+        if (typedAction == null) return;
+        if (typedAction != END || cas_chainClosed(false, true))
+            actions.offer(typedAction);//use END to close chain
+
+        tick();//tick executed here is for INSTANT actions or provided events.
+    }
+
+    /**
+     * 这里表示在awaitMode==AWAIT期间，不接受新event的缓存（也可以设计成可以缓
+     * 存event，但意义也许不明，且实现要麻烦一点），如果不缓存，只要用户可以在调
+     * 用CollecFunction之前没有缓存event那么CollectFunction之后的then都是用的最
+     * 新的从CollectFunction返回的event。不禁止的话，就无法保证这点。
+     */
+    /*onEvent方法会在多线程中调用，而tick方法由tick_mutex保护，仅由一个线程执行*/
+    @CalledByMultiThreads
+    public final void onEvent(Object event) {
+        if (isEnd()) return;
+        addLast(event);
+        //此CAS操作的cost仅在初始情况下发生一次。
+        //此处使用CAS更新awaitMode的原因是，如果不是cas，那么设置instant的操作
+        // 可以无限阻塞（意思是可以之后随时执行），这会使得WhenAction中设置awaitMode=AWAIT无效化。
+        cas_status(DEFERRED, INSTANT);
+        tick();
+    }
+
+    /**
+     * 提交空事件，用来触发instantAction而不用压入额外的事件。
+     */
+    public final void onEvent() {
+        if (isEnd()) return;
+        cas_status(DEFERRED, INSTANT);
+        tick();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void tick() {
+        /**因为所有情况下只有一个tick_mutex==true，而cas_tick_mutex操作要比get_tick_mutex()
+         * 更加费时，所以对于大部分false的情况下，先用get_tick_mutex预先进行条件短路
+         * 可以提高效率*/
+        if (!cas_tick_mutex(false, true))
+            return;
+
+        outer:
+        while (true)
+            if (isEnd()) {
+                while (keep_tick_mutex_if(whenEndChain::notEmpty)
+                        && executeAction(whenEndChain)) ;
+                break;
+            } else {
+                //只有没有任何阻碍的INSTANT mode才尝试执行action
+                while (keep_tick_mutex_if(() -> get_status() == INSTANT && actions.notEmpty())) {
+                    _Action action = actions.peek();
+                    if (action == END) {
+                        set_status(FINISH);
+                        continue outer;
+                    } else if (!executeAction(actions))
+                        return;
+                }
+                break;
+            }
+    }
+
+    private boolean executeAction(SpecialQueue<_Action> queue) {
+        _Action action = queue.peek();
+        if (!keep_tick_mutex_if(() -> action.precondition(this)))
+            return false;
+        try {
+            action.run(this);
+        } catch (Exception e) {
+            _exception(e);
+        }
+        if (action.postcondition(this))
+            queue.poll();
+        return true;
+    }
+
 
     public final boolean chainClosed() {
         return get_chainClosed();
     }
 
     public final boolean isEnd() {
-        Action action = chain.peek();
-        return action == END;
-    }
-
-    private void dynamicAddAction(Action typedAction) {
-        if (typedAction == null) return;
-        if (typedAction instanceof EndAction) {
-            if (cas_chainClosed(false, true)) //first one that ends this chain
-                chain.add(END);//use END to close chain
-            if (typedAction != END)
-                whenEndChain.add((EndAction) typedAction);
-        } else
-            chain.add(typedAction);
-
-        this.tick();//tick executed here is for INSTANT actions or provided events.
+        return get_status() == FINISH;
     }
 
     /**
      * add exception handler to process exception. this handler could also process other asyncStreams. don't repeat adding exceptionHandler
      */
+
     public AsyncStream exception(ExceptionHandler exceptionHandler) {
         if (exceptionHandler == null || this.exceptionHandler != null) return this;
         this.exceptionHandler = exceptionHandler;
@@ -231,146 +315,106 @@ public class AsyncStream extends AsyncStreamAtomicRef {
             exceptionHandler.handle(e);
         else
             e.printStackTrace();
+        set_status(FINISH);//发生错误后，结束执行
+
     }
 
-    /**
-     * 这里表示在awaitMode==AWAIT期间，不接受新event的缓存（也可以设计成可以缓
-     * 存event，但意义也许不明，且实现要麻烦一点），如果不缓存，只要用户可以在调
-     * 用CollecFunction之前没有缓存event那么CollectFunction之后的then都是用的最
-     * 新的从CollectFunction返回的event。不禁止的话，就无法保证这点。
-     */
-    /*onEvent方法会在多线程中调用，而tick方法由tick_mutex保护，仅由一个线程执行*/
-    public final void onEvent(Object event) {
-        if (isEnd() || get_awaitMode() == AWAIT) return;
-        this.events.add(event == null ? NULL : event);
-        if (this.get_awaitMode() == DEFERRED)
-            //此CAS操作的cost仅在初始情况下发生一次。
-            //此处使用CAS更新awaitMode的原因是，如果不是cas，那么设置instant的操作
-            // 可以无限阻塞（意思是可以之后随时执行），这会使得WhenAction中设置awaitMode=AWAIT无效化。
-            this.cas_awaitMode(DEFERRED, INSTANT);
-        this.tick();
+    @CalledBySingleThread
+    void addFirst(Object event) {
+        events.push(event == null ? NULL : event);
     }
 
-    /**
-     * 提交空事件，用来触发instantAction而不用压入额外的事件。
-     */
-    public final void onEvent() {
-        if (isEnd() || get_awaitMode() == AWAIT) return;
-        if (this.get_awaitMode() == DEFERRED)
-            this.cas_awaitMode(DEFERRED, INSTANT);
-        this.tick();
+    @CalledByMultiThreads
+    void addLast(Object event) {
+        events.offer(event == null ? NULL : event);
     }
 
-    @SuppressWarnings("unchecked")
-    private void tick() {
-        /**因为所有情况下只有一个tick_mutex==true，而cas_tick_mutex操作要比get_tick_mutex()
-         * 更加费时，所以对于大部分false的情况下，先用get_tick_mutex预先进行条件短路
-         * 可以提高效率*/
-        if (get_tick_mutex() || !cas_tick_mutex(false, true))
-            return;
-
-        while (true) {
-            if (tick_mutex_release_condition_satisfied(this.chain::isEmpty))
-                return;
-
-            Action action = this.chain.peek();
-            assert action != null;
-            //InstantAction doesn't need to wait for events
-            if (action instanceof InstantAction) {
-                if (tick_mutex_release_condition_satisfied(() -> get_awaitMode() != INSTANT))
-                    return;
-                if (action == END) {//proceed to end action, gonna finish
-                    while (!tick_mutex_release_condition_satisfied(whenEndChain::isEmpty)) {
-                        EndAction endAction = this.whenEndChain.poll();
-                        try {
-                            endAction.run();
-                        } catch (Throwable e) {
-                            _exception(e);
-                        }
-                    }
-                    return;
-                } else
-                    executeInstantAction(action);
-            } else {
-                if (tick_mutex_release_condition_satisfied(this.events::isEmpty))
-                    return;
-
-                Object event = this.events.poll();//consume event
-                if (event == NULL) event = null;
-                executeOnEventAction(action, event);
-            }
-        }
+    @CalledBySingleThread
+    Object pollEvent() {
+        Object event = events.poll();
+        return event == NULL ? null : event;
     }
 
-    private void executeInstantAction(Action action) {
-        try {
-            switch (action.type()) {
-                case ThenAction:
-                    ((ThenAction) action).run();
-                    break;
-                case ThenFunction:
-                    Object result = ((ThenFunction) action).run();
-                    if (result instanceof AsyncStream)
-                        awaitAsync((AsyncStream) result);
-                    else
-                        this.events.add(result == null ? NULL : result);//将返回的结果加入到事件队列的尾端
-                    break;
-                case WhenAction:
-                    this.set_awaitMode(AWAIT);
-                    ((WhenAction) action).run(this::awakeMe);
-                    break;
-                default:
-                    break;
-            }
-            this.chain.poll();
-        } catch (Throwable e) {
-            _exception(e);
-        }
+    @CalledBySingleThread
+    Object pollRawEvent() {
+        return events.poll();
     }
 
-    @SuppressWarnings("unchecked")
-    private void executeOnEventAction(Action action, Object event) {
-        try {
-            boolean removeAction = true;
-            //处理事件
-            switch (action.type()) {
-                case ThenOnEventAction:
-                    ((ThenOnEventAction) action).onEvent(event);
-                    break;
-                case ThenOnEventFunction:
-                    Object result = ((ThenOnEventFunction) action).onEvent(event);
-                    if (result instanceof AsyncStream)
-                        awaitAsync((AsyncStream) result);
-                    else
-                        this.events.add(result == null ? NULL : result);//将返回的结果加入到事件队列的尾端
-                    break;
-                case LoopOnEventAction:
-                    if (((LoopOnEventAction) action).onEvent(event))
-                        removeAction = false;
-                    break;
-                default:
-                    break;
-            }
-            if (removeAction) this.chain.poll();
-        } catch (Throwable e) {
-            _exception(e);
-        } finally {
-            if (event instanceof Cleanable)
-                ((Cleanable) event).clean();
-        }
+    boolean hasMoreEvents() {
+        return !events.isEmpty();
     }
 
     //awakeMe方法可能在另一线程中调用，但由于WhenAction或awaitAsync的语义使
     // 得不同的设置awaitMode之间存在happen-before关系，所以正确性并无问题
-    private void awakeMe(Object returnFromAnotherAsync) {
-        if (returnFromAnotherAsync != null)
-            this.events.add(returnFromAnotherAsync);//这里不判断NULL对象的使用是因为，如果是从awaitAsync返回，则NULL已经处理，另一种会返回的只有CollectFunction，它只返回数组，所以也不用判断
-        this.set_awaitMode(INSTANT);//必须在event添加之后设置，否则中间过程可能夹杂其他事件，不能保证最新
+    protected void wakeUp(Object returnFromAwait) {
+        if (get_status() != AWAIT) return;//这种情况应该算是Exception
+        if (returnFromAwait != null)
+            this.addFirst(returnFromAwait);
+        this.set_status(INSTANT);
         this.onEvent();
     }
+    //    private void executeInstantAction(Action action) {
+//        try {
+//            switch (action.type()) {
+//                case ThenAction:
+//                    ((ThenAction) action).run();
+//                    break;
+//                case ThenFunction:
+//                    Object result = ((ThenFunction) action).run();
+//                    if (result instanceof AsyncStream)
+//                        awaitAsync((AsyncStream) result);
+//                    else
+//                        this.events.add(result == null ? NULL : result);//将返回的结果加入到事件队列的尾端
+//                    break;
+//                case WhenAction:
+//                    this.set_status(AWAIT);
+//                    ((WhenAction) action).run(this::awakeMe);
+//                    break;
+//                default:
+//                    break;
+//            }
+//            this.chain.poll();
+//        } catch (Throwable e) {
+//            _exception(e);
+//        }
+//    }
+//
+//    @SuppressWarnings("unchecked")
+//    private void executeOnEventAction(Action action, Object event) {
+//        try {
+//            boolean removeAction = true;
+//            //处理事件
+//            switch (action.type()) {
+//                case ThenOnEventAction:
+//                    ((ThenOnEventAction) action).onEvent(event);
+//                    break;
+//                case ThenOnEventFunction:
+//                    Object result = ((ThenOnEventFunction) action).onEvent(event);
+//                    if (result instanceof AsyncStream)
+//                        awaitAsync((AsyncStream) result);
+//                    else
+//                        this.events.add(result == null ? NULL : result);//将返回的结果加入到事件队列的尾端
+//                    break;
+//                case LoopOnEventAction:
+//                    if (((LoopOnEventAction) action).onEvent(event))
+//                        removeAction = false;
+//                    break;
+//                default:
+//                    break;
+//            }
+//            if (removeAction) this.chain.poll();
+//        } catch (Throwable e) {
+//            _exception(e);
+//        } finally {
+//            if (event instanceof Cleanable)
+//                ((Cleanable) event).clean();
+//        }
+//    }
 
-    private void awaitAsync(AsyncStream anotherAsync) {
-        this.set_awaitMode(AWAIT);
-        anotherAsync.then(() -> this.awakeMe(anotherAsync.events.poll())).end();//内部Async不再添加新的handler
-    }
+
+//
+//    private void awaitAsync(AsyncStream anotherAsync) {
+//        this.set_status(AWAIT);
+//        anotherAsync.then(() -> this.awakeMe(anotherAsync.events.poll())).end();//内部Async不再添加新的handler
+//    }
 }

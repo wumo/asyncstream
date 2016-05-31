@@ -4,6 +4,9 @@ import lab.mars.util.async.AsyncStream;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static lab.mars.util.async.AsyncStream.deferredAsync;
+import static lab.mars.util.async.AsyncStream.instantAsync;
+
 /**
  * Created by haixiao on 2015/3/21.
  * Email: wumo@outlook.com
@@ -45,7 +48,7 @@ public class TestAsync {
     }
 
     @Test
-    public void testThen() {
+    public void testDeferredAsync() {
         AsyncStream async = AsyncStream.deferredAsync();
         async.then(() -> {
 
@@ -54,8 +57,8 @@ public class TestAsync {
     }
 
     @Test
-    public void testThen2() {
-        AsyncStream async = AsyncStream.instantAsync(1);
+    public void testNotEnd() {
+        AsyncStream async = instantAsync(1);
         int[] recv = new int[1];
         async.<Integer>then(e -> {
             System.out.println(e);
@@ -67,8 +70,8 @@ public class TestAsync {
     }
 
     @Test
-    public void testThen3() {
-        AsyncStream async = AsyncStream.instantAsync(1);
+    public void testEnd() {
+        AsyncStream async = instantAsync(1);
         int[] recv = new int[1];
         async.<Integer>then(e -> {
             System.out.println(e);
@@ -81,7 +84,7 @@ public class TestAsync {
 
     @Test
     public void testProvidedEvents() {
-        AsyncStream async = AsyncStream.instantAsync(2, 3, 4, 5, 6, 7, 8);
+        AsyncStream async = instantAsync(2, 3, 4, 5, 6, 7, 8);
         async.<Integer>then(e -> {
             System.out.println("first then recv=" + e);
         }).<Integer>then(e -> {
@@ -91,11 +94,12 @@ public class TestAsync {
             return --loop > 0;
         }).end();
         System.out.println("async.isEnd=" + async.isEnd());
+        Assert.assertTrue(async.isEnd());
     }
 
     @Test
     public void testProvidedEvents2() {
-        AsyncStream async = AsyncStream.instantAsync(2, 3, 4);
+        AsyncStream async = instantAsync(2, 3, 4);
         int[] recv = new int[7];
         async.then((Integer e) -> {
             recv[0] = e;
@@ -128,8 +132,8 @@ public class TestAsync {
         async
                 .<Integer>then(e -> {
                     recv[0] = e;
-                }).then(() -> async2.then(e -> e))
-                .then(() -> recv[2] = 5)
+                }).then(() -> async2.then(e -> e).end())
+                  .then(() -> recv[2] = 5)
                 .<Integer>then(e -> {
                     recv[1] = e;
                 })
@@ -156,12 +160,11 @@ public class TestAsync {
     @Test
     public void testReturnResult() {
         AsyncStream async = AsyncStream.deferredAsync();
-        async.<Double, Integer>then(e -> {
-            return 1.0 * e;
-        }).<Double>then(result -> {
-            System.out.println(result);
-            Assert.assertEquals(100.0, result, 1e-9);
-        });
+        async.<Double, Integer>then(e -> 1.0 * e)
+                .<Double>then(result -> {
+                    System.out.println(result);
+                    Assert.assertEquals(100.0, result, 1e-9);
+                });
         async.onEvent(100);
     }
 
@@ -169,7 +172,7 @@ public class TestAsync {
     public void testAsyncInstantAction() {
         AsyncStream async = AsyncStream.deferredAsync();
         async.then(e -> {
-            return AsyncStream.instantAsync(e);
+            return instantAsync(e).end();
         }).then(e -> {
             Assert.assertEquals(2, e);
         }).end();
@@ -181,7 +184,7 @@ public class TestAsync {
     public void testNull() {
         AsyncStream async = AsyncStream.deferredAsync();
         async.then(e -> {
-            return AsyncStream.instantAsync(e);
+            return instantAsync(e).end();
         }).then(e -> {
             Assert.assertEquals(null, e);
         }).end();
@@ -192,10 +195,10 @@ public class TestAsync {
     @Test
     public void testWhen() {
         int[] result = new int[4];
-        AsyncStream async0 = AsyncStream.instantAsync();
-        AsyncStream async1 = AsyncStream.deferredAsync().<Integer>then(e -> {result[1] = e;});
-        AsyncStream async2 = AsyncStream.deferredAsync().<Integer>then(e -> {result[2] = e;});
-        AsyncStream async3 = AsyncStream.deferredAsync().<Integer>then(e -> {result[3] = e;});
+        AsyncStream async0 = instantAsync();
+        AsyncStream async1 = AsyncStream.deferredAsync().<Integer>then(e -> {result[1] = e;}).end();
+        AsyncStream async2 = AsyncStream.deferredAsync().<Integer>then(e -> {result[2] = e;}).end();
+        AsyncStream async3 = AsyncStream.deferredAsync().<Integer>then(e -> {result[3] = e;}).end();
 
         async0.when(async1, async2, async3)
               .then(() -> result[0] = 1).end();
@@ -212,9 +215,9 @@ public class TestAsync {
     }
 
     @Test
-    public void testWhenThen() {
-        AsyncStream async0 = AsyncStream.instantAsync();
-        AsyncStream async1 = AsyncStream.deferredAsync();
+    public void testWhenDeferredThen() {
+        AsyncStream async0 = instantAsync();
+        AsyncStream async1 = AsyncStream.deferredAsync().end();
         int[] result = {0};
         async0.when(async1).then(() -> {
             result[0] = 1;
@@ -226,33 +229,44 @@ public class TestAsync {
 
     @Test
     public void testCollect() {
-        AsyncStream async0 = AsyncStream.instantAsync();
-        AsyncStream async1 = AsyncStream.deferredAsync().then(e -> e);
-        AsyncStream async2 = AsyncStream.deferredAsync().then(e -> e);
-        AsyncStream async3 = AsyncStream.deferredAsync().then(e -> e);
-        boolean[] recv=new boolean[]{false};
+        AsyncStream async0 = instantAsync();
+        AsyncStream async1 = AsyncStream.deferredAsync().then(e -> e).end();
+        AsyncStream async2 = AsyncStream.deferredAsync().then(e -> e).end();
+        AsyncStream async3 = AsyncStream.deferredAsync().then(e -> e).end();
+        boolean[] recv = new boolean[]{false};
         async0.collect(async1, async2, async3)
-              .<Object[]>then(result -> {
-                  recv[0]=true;
-                  for (Object o : result)
-                      System.out.println(o);
-              }).end();
+                .<Object[]>then(result -> {
+                    recv[0] = true;
+                    for (Object o : result)
+                        System.out.println(o);
+                }).end();
         Assert.assertTrue(async0.chainClosed());
         Assert.assertTrue(async1.chainClosed());
         Assert.assertTrue(async2.chainClosed());
         Assert.assertTrue(async3.chainClosed());
-        Assert.assertTrue(recv[0]==false);
+        Assert.assertTrue(recv[0] == false);
         async1.onEvent(2);
-        Assert.assertTrue(recv[0]==false);
+        Assert.assertTrue(recv[0] == false);
         Assert.assertTrue(async1.isEnd());
         Assert.assertTrue(!async2.isEnd());
         Assert.assertTrue(!async3.isEnd());
         async2.onEvent(3);
-        Assert.assertTrue(recv[0]==false);
+        Assert.assertTrue(recv[0] == false);
         Assert.assertTrue(async2.isEnd());
         Assert.assertTrue(!async3.isEnd());
         async3.onEvent(4);
-        Assert.assertTrue(recv[0]==true);
+        Assert.assertTrue(recv[0] == true);
         Assert.assertTrue(async3.isEnd());
+    }
+
+    @Test
+    public void testException() {
+        AsyncStream async0 = deferredAsync();
+        Throwable[] e1 = new Exception[]{null};
+        async0.then(() -> {
+            return 1 / 0;
+        }).end().exception(e -> e1[0] = e);
+        async0.onEvent();
+        Assert.assertTrue(e1[0] instanceof ArithmeticException);
     }
 }

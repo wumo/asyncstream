@@ -14,14 +14,14 @@ public class testAsyncAwaitInstantAsyncBug {
     @Test
     public void testWhenAsync() {
         boolean[] touch = new boolean[]{false};
-        instantAsync().when(instantAsync()).then(() -> touch[0] = true).end();
+        instantAsync().when(instantAsync().end()).then(() -> touch[0] = true).end();
         Assert.assertTrue(touch[0] == true);
     }
 
     @Test
     public void testAsync() {
         boolean[] touch = new boolean[]{false};
-        instantAsync().then(() -> instantAsync()).then(() -> touch[0] = true).end();
+        instantAsync().then(() -> instantAsync().end()).then(() -> touch[0] = true).end();
         Assert.assertTrue(touch[0] == true);
     }
 }
