@@ -114,6 +114,18 @@ public class AsyncTest2 {
         executor.shutdownNow();
     }
 
+
+    /*
+    Benchmark        (threadCount)  Mode  Cnt     Score     Error  Units
+AsyncTest2.test              1  avgt   10  3117.273 ± 317.487  us/op
+AsyncTest2.test              2  avgt   10  3507.157 ± 114.938  us/op
+AsyncTest2.test              3  avgt   10  3084.216 ±  80.021  us/op
+AsyncTest2.test              4  avgt   10  2797.186 ± 101.830  us/op
+AsyncTest2.test              5  avgt   10  2868.515 ±  46.786  us/op
+AsyncTest2.test              6  avgt   10  2816.878 ±  37.290  us/op
+AsyncTest2.test              7  avgt   10  2960.530 ± 409.869  us/op
+AsyncTest2.test              8  avgt   10  2759.667 ±  30.220  us/op
+     */
     public static void main(String[] args) throws RunnerException, InterruptedException {
         Options opt = new OptionsBuilder()
                 .include(AsyncTest2.class.getSimpleName())
