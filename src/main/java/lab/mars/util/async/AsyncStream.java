@@ -123,6 +123,12 @@ public class AsyncStream extends AsyncStreamAtomicRef {
         return this;
     }
 
+    public final AsyncStream await(AsyncStream anotherAsync) {
+        if (anotherAsync == null) return this;
+        dynamicAddAction(new _AwaitAsyncStream(anotherAsync));
+        return this;
+    }
+
     /**
      * wait until all of the  asyncstreams end.
      */
@@ -268,6 +274,8 @@ public class AsyncStream extends AsyncStreamAtomicRef {
 
     private boolean executeAction(SpecialQueue<_Action> queue) {
         _Action action = queue.peek();
+        assert action != null;
+
         if (!keep_tick_mutex_if(() -> action.precondition(this)))
             return false;
         try {

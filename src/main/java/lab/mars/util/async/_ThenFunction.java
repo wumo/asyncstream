@@ -20,7 +20,7 @@ public class _ThenFunction extends _Action {
         if (result instanceof AsyncStream) {
             asyncStream.set_status(AWAIT);
             AsyncStream anotherAsync = (AsyncStream) result;
-            anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollEvent()));
+            anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollRawEvent()));
         } else
             asyncStream.addFirst(result);
     }

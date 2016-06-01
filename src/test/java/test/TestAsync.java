@@ -193,6 +193,19 @@ public class TestAsync {
     }
 
     @Test
+    public void testAwait() {
+        int[] result = new int[1];
+        AsyncStream async0 = instantAsync();
+        AsyncStream async1 = AsyncStream.deferredAsync().<Integer>then(e -> {result[0] = e;}).end();
+        async0.await(async1).end();
+        Assert.assertTrue(!async0.isEnd());
+        Assert.assertTrue(result[0] != 2);
+        async1.onEvent(2);
+        Assert.assertTrue(result[0] == 2);
+        Assert.assertTrue(async0.isEnd());
+    }
+
+    @Test
     public void testWhen() {
         int[] result = new int[4];
         AsyncStream async0 = instantAsync();
