@@ -6,20 +6,42 @@ import lab.mars.util.async.internal.SpecialQueue;
 import java.util.Collection;
 
 /**
- * Created by haixiao on 2015/3/20.
+ * <p>
+ * Created by haixiao on 2015/3/20.<br>
  * Email: wumo@outlook.com
- * <br>
- * Promise-like asynchronous event handling chain.
- * <br>
- * AsyncStream is designed for async event, but doesn't provide background thread pool for saving async state.
- * <br>
- * <b>Note: This class provides static insertion order for inner async actions. only outermost async can add dynamic actions!! </b>
+ * </p>
+ * 异步数据流与异步处理流的合体，提供Promise-like的编程方式（但并不是Promise）。<br>
+ * <p>整个数据结构如下所示：<br>
+ * action_i&lt;-...action_2&lt;-action_1&lt;-O-&gt;event_1-&gt;event_2-&gt;...-&gt;event_i <br>
+ * 左端可以动态添加任意类型任意多的action（通过{@link AsyncStream#then}、{@link AsyncStream#when}、{@link AsyncStream#collect}等等方法添加），
+ * 而右侧则可以动态添加任意类型任意多的事件对象（通过{@link AsyncStream#onEvent}方法添加）。</p>
+ * <p>事件的消费顺序是：中心点O左侧的action依照添加的顺序依次消费右侧的事件（事件也是按照添加的顺序被消费）。
+ * 如action_1消费event_1，然后action_2消费event_2等等。</p>
+ * <p>每个action的执行需要一定的条件，如{@link AsyncStream#then(ThenOnEventAction)}
+ * 需要消费一个事件才可执行，如果没有则等待（异步等待，事件到达时触发执行）；
+ * action执行完毕也有条件，如{@link AsyncStream#when}，则是必须等待多个AsyncStream
+ * 都结束了才算执行完毕。</p>
+ *<p>action由action添加方法（{@link AsyncStream#then}等）或事件添加方法（{@link AsyncStream#onEvent}）
+ * 触发执行，目前只会在触发的线程中执行（单线程顺序执行）。</p>
+ * <p>应用时需要注意的是{@link AsyncStream#end}方法，此方法是用来结束action链
+ * 的定义的，如果不调用{@link AsyncStream#end}方法，则无法判断此AsyncStream是否已经结束。<br>
+ *     调用{@link AsyncStream#end}方法后，之后通过{@link AsyncStream#then}等方法添加的action会被直接忽视掉，但{@link AsyncStream#whenEnd}添加的action会起作用</p>
+ * <p>{@link AsyncStream#whenEnd}添加的action是用来在AsyncStream结束之后触发执行的，这些action可以要求消费事件，但不会回传事件（可以从{@link AsyncStream#whenEnd}的
+ * 函数重载类型中看出，只有两种不会回传事件的Action）。</p>
+ * <p>另外关于错误处理，通过{@link AsyncStream#exception(ExceptionHandler)}方法，设置一个统一的错误处理方法，当AsyncStream执行过程中发生错误时，将立即结束流，即{@link AsyncStream#isEnd}将返回true；也可以主动提交错误致使流结束{@link AsyncStream#onException(Throwable)}。</p>
  */
 public class AsyncStream extends AsyncStreamAtomicRef {
     /*
-     *AsyncStream的语义：
-     * AsyncStream表示异步事件处理流。
-     * AsyncStream主要由两个并发队列构成：一个是事件缓存队列；一个是处理器缓存队列。
+     *@fmt:off
+     * AsyncStream设计细节。
+     * 每个action都有开始执行的条件和结束执行的条件。
+     *      o开始执行的条件：由action的参数列表表示，无参数的action无开始执行条件（
+     *          即按顺序轮到此action执行时便可立即执行），而有参数的action，则需要获取
+     *          与参数数量相等的event才可执行（即此action必须等到event队列中至少有足
+     *          够的event时才可执行）；
+     *      o结束执行的条件：由action的返回值决定，无返回值的action无结束执行条件
+     *          （即action结束后便可立即尝试执行下一个action），而具有返回值
+     * @fmt:on
      *
      */
     private static final _Action END = new _Action() {
