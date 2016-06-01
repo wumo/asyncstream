@@ -47,7 +47,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     private static final _Action END = new _Action() {
         @Override protected void run(AsyncStream asyncStream) {}
     };
-    static final Object NULL = new Object();
+    private static final Object NULL = new Object();
     private SpecialQueue<Object> events = new SpecialQueue<>();
     private SpecialQueue<_Action> actions = new SpecialQueue<>();
     private SpecialQueue<_Action> whenEndChain = new SpecialQueue<>();
