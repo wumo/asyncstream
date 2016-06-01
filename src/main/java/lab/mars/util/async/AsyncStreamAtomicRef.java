@@ -3,7 +3,7 @@ package lab.mars.util.async;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.function.Supplier;
 
-import static org.jctools.util.UnsafeAccess.UNSAFE;
+import static lab.mars.util.async.internal.UnsafeAccess.UNSAFE;
 
 /**
  * Created by haixiao on 2015-08-13.

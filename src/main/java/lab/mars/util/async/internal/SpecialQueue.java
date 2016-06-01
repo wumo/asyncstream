@@ -13,7 +13,7 @@
  */
 package lab.mars.util.async.internal;
 
-import static org.jctools.util.UnsafeAccess.UNSAFE;
+import static lab.mars.util.async.internal.UnsafeAccess.UNSAFE;
 
 /**
  * <p>
