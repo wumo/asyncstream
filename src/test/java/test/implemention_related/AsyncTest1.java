@@ -63,16 +63,16 @@ public class AsyncTest1 {
     @Setup(Level.Invocation)
     public void setup() {
         asyncStream = AsyncStream.deferredAsync();
-        endLatch = new CountDownLatch(threadCount);
+        endLatch = new CountDownLatch(1);
         startLatch = new CountDownLatch(1);
-//        for (int i = 0; i < total; i++) {
-//            asyncStream.<Integer>then(e -> {
-//                e++;
-//            });
-//        }
-//        asyncStream.end(() -> {
-//            endLatch.countDown();
-//        });
+        for (int i = 0; i < total; i++) {
+            asyncStream.<Integer>then(e -> {
+                e++;
+            });
+        }
+        asyncStream.end(() -> {
+            endLatch.countDown();
+        });
 
         executor = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
@@ -81,14 +81,15 @@ public class AsyncTest1 {
                     int load = total / threadCount;
                     startLatch.await();
                     for (int i1 = 0; i1 < load; i1++) {
-                        if (i1 % 2 == 0)
-                            asyncStream.onEvent(i1);
-                        else
-                            asyncStream.<Integer>then(e -> {
-                                e++;
-                            });
+                        asyncStream.onEvent(i1);
+//                        if (i1 % 2 == 0)
+//                            asyncStream.onEvent(i1);
+//                        else
+//                            asyncStream.<Integer>then(e -> {
+//                                e++;
+//                            });
                     }
-                    endLatch.countDown();
+//                    endLatch.countDown();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
