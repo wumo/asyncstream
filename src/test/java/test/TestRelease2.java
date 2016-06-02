@@ -1,6 +1,6 @@
 package test;
 
-import static lab.mars.util.async.internal.UnsafeAccess.UNSAFE;
+import static lab.mars.special_queue.UnsafeAccess.UNSAFE;
 
 /**
  * <p>

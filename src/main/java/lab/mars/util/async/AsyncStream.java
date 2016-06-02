@@ -1,7 +1,7 @@
 package lab.mars.util.async;
 
 import lab.mars.util.async.action.*;
-import lab.mars.util.async.internal.SpecialQueue;
+import lab.mars.special_queue.SpecialQueue;
 
 import java.util.Collection;
 
