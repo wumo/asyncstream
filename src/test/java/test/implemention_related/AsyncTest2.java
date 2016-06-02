@@ -47,15 +47,7 @@ public class AsyncTest2 {
     AsyncStream asyncStream;
     CountDownLatch endLatch, startLatch;
     ExecutorService executor;
-    static final int total;
-
-    static {
-        int n = 1;
-        for (int i = 0; i < 8; i++) {
-            n *= i + 1;
-        }
-        total = n;
-    }
+    static final int total = 40320;
 
     @Param(value = {"1", "2", "3", "4", "5", "6", "7", "8"})
     int threadCount;
@@ -102,7 +94,7 @@ public class AsyncTest2 {
 //    @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
     @Warmup(iterations = 10, batchSize = 1000)
     @Measurement(iterations = 10, batchSize = 1000)
-    @OperationsPerInvocation(1000)
+    @OperationsPerInvocation(1000 )
     @BenchmarkMode(Mode.AverageTime)
     public void test() throws InterruptedException {
         startLatch.countDown();
@@ -125,7 +117,32 @@ AsyncTest2.test              5  avgt   10  2868.515 ±  46.786  us/op
 AsyncTest2.test              6  avgt   10  2816.878 ±  37.290  us/op
 AsyncTest2.test              7  avgt   10  2960.530 ± 409.869  us/op
 AsyncTest2.test              8  avgt   10  2759.667 ±  30.220  us/op
+
+
+Benchmark        (threadCount)  Mode  Cnt     Score     Error  Units
+AsyncTest2.test              1  avgt   10  3096.851 ± 174.783  us/op
+AsyncTest2.test              2  avgt   10  3194.395 ±  72.536  us/op
+AsyncTest2.test              3  avgt   10  3152.409 ±  45.526  us/op
+AsyncTest2.test              4  avgt   10  2728.716 ±  85.472  us/op
+AsyncTest2.test              5  avgt   10  2854.630 ±  75.907  us/op
+AsyncTest2.test              6  avgt   10  2873.981 ±  34.585  us/op
+AsyncTest2.test              7  avgt   10  3051.169 ± 201.987  us/op
+AsyncTest2.test              8  avgt   10  2855.872 ±  62.533  us/op
+
+lazySet version
+Benchmark        (threadCount)  Mode  Cnt     Score     Error  Units
+AsyncTest2.test              1  avgt   10  2788.985 ± 114.927  us/op
+AsyncTest2.test              2  avgt   10  3097.012 ± 138.015  us/op
+AsyncTest2.test              3  avgt   10  2968.466 ±  44.522  us/op
+AsyncTest2.test              4  avgt   10  2699.264 ±  44.041  us/op
+AsyncTest2.test              5  avgt   10  2704.832 ±  43.998  us/op
+AsyncTest2.test              6  avgt   10  2815.367 ±  24.906  us/op
+AsyncTest2.test              7  avgt   10  2696.310 ±  26.508  us/op
+AsyncTest2.test              8  avgt   10  2799.674 ±  27.635  us/op
      */
+
+
+
     public static void main(String[] args) throws RunnerException, InterruptedException {
         Options opt = new OptionsBuilder()
                 .include(AsyncTest2.class.getSimpleName())

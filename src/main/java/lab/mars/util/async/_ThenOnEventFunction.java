@@ -18,7 +18,8 @@ public class _ThenOnEventFunction extends _OnEventAction {
     @Override protected void onEvent(AsyncStream asyncStream, Object event) {
         Object result = thenOnEventFunction.onEvent(event);
         if (result instanceof AsyncStream) {
-            asyncStream.set_status(AWAIT);
+//            asyncStream.set_status(AWAIT);
+            asyncStream.lazySet_status(AWAIT);
             AsyncStream anotherAsync = (AsyncStream) result;
             anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollRawEvent()));
         } else

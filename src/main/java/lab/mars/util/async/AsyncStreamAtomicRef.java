@@ -44,6 +44,10 @@ public class AsyncStreamAtomicRef {
         status = value;
     }
 
+    protected final void lazySet_status(int value) {
+        UNSAFE.putOrderedInt(this, status_OFFSET, value);
+    }
+
     protected final boolean cas_status(int expect, int update) {
         if (get_status() != expect) return false;
         return UNSAFE.compareAndSwapInt(this, status_OFFSET, expect, update);
@@ -72,6 +76,10 @@ public class AsyncStreamAtomicRef {
         tick_mutex = newValue ? 1 : 0;
     }
 
+    protected final void lazySet_tick_mutex(boolean newValue) {
+        UNSAFE.putOrderedInt(this, tick_mutex_OFFSET, newValue ? 1 : 0);
+    }
+
     protected final boolean cas_tick_mutex(boolean expect, boolean update) {
         if (get_tick_mutex() != expect) return false;
         int e = expect ? 1 : 0;
@@ -90,7 +98,8 @@ public class AsyncStreamAtomicRef {
     protected boolean keep_tick_mutex_if(Supplier<Boolean> condition) {
         while (true) {
             if (!condition.get()) {
-                set_tick_mutex(false);
+//                set_tick_mutex(false);
+                lazySet_tick_mutex(false);
                 if (!condition.get())
                     return false;
                 else if (!cas_tick_mutex(false, true))

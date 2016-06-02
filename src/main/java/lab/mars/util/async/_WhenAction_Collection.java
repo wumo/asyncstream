@@ -17,7 +17,8 @@ public class _WhenAction_Collection extends _Action {
     }
 
     @Override protected void run(AsyncStream asyncStream) {
-        asyncStream.set_status(AWAIT);
+//        asyncStream.set_status(AWAIT);
+        asyncStream.lazySet_status(AWAIT);
         AtomicInteger count = new AtomicInteger(0);
         int size = asyncs.size();
         for (AsyncStream async : asyncs) {

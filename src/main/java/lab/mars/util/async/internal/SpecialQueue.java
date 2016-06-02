@@ -57,9 +57,10 @@ public class SpecialQueue<E> {
         /*这里prevProducerNode在执行soNext(nextNode)之前，它的next一定是null（因
          *为它是producerNode），而新加的node的next也是null。如果同时存在多个线程调用offer
          * 方法，会由xchgProducerNode方法保证按顺序添加（即正确设置各自的next属性）。
-         * 这里设置next属性是使用soNext(lazySet)方法，由于是多个写线程，所以读线程中可能
-         * 会发生不一致的情形（即consumerNode的next属性在写线程中已经设置了下一个node，
-         * 而读线程中依然读的是null），此方法的使用将影响poll或peek的设计。
+         * 这里设置next属性是使用soNext(lazySet)方法，读线程中可能会发生不一致的情形
+         * （即consumerNode的next属性在写线程中已经设置了下一个node，而读线程中依
+         * 然读的是null），此方法的使用将影响poll或peek的设计。注意此时lazySet仍然是Single Writer
+         * （因为preProducerNode只有一个）
         */
         return true;
     }

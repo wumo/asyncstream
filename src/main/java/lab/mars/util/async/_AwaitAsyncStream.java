@@ -16,7 +16,8 @@ public class _AwaitAsyncStream extends _Action {
     }
 
     @Override protected void run(AsyncStream asyncStream) throws Exception {
-        asyncStream.set_status(AWAIT);
+//        asyncStream.set_status(AWAIT);
+        asyncStream.lazySet_status(AWAIT);
         anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollRawEvent()));
     }
 }

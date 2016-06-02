@@ -16,7 +16,8 @@ public class _CollectionFunction_Array extends _Action {
     }
 
     @Override protected void run(AsyncStream asyncStream) {
-        asyncStream.set_status(AWAIT);
+//        asyncStream.set_status(AWAIT);
+        asyncStream.lazySet_status(AWAIT);
         AtomicInteger count = new AtomicInteger(0);
         int size = asyncs.length;
         Object[] result = new Object[size];

@@ -21,14 +21,15 @@ import java.util.Collection;
  * 需要消费一个事件才可执行，如果没有则等待（异步等待，事件到达时触发执行）；
  * action执行完毕也有条件，如{@link AsyncStream#when}，则是必须等待多个AsyncStream
  * 都结束了才算执行完毕。</p>
- *<p>action由action添加方法（{@link AsyncStream#then}等）或事件添加方法（{@link AsyncStream#onEvent}）
+ * <p>action由action添加方法（{@link AsyncStream#then}等）或事件添加方法（{@link AsyncStream#onEvent}）
  * 触发执行，目前只会在触发的线程中执行（单线程顺序执行）。</p>
  * <p>应用时需要注意的是{@link AsyncStream#end}方法，此方法是用来结束action链
  * 的定义的，如果不调用{@link AsyncStream#end}方法，则无法判断此AsyncStream是否已经结束。<br>
- *     调用{@link AsyncStream#end}方法后，之后通过{@link AsyncStream#then}等方法添加的action会被直接忽视掉，但{@link AsyncStream#whenEnd}添加的action会起作用</p>
+ * 调用{@link AsyncStream#end}方法后，之后通过{@link AsyncStream#then}等方法添加的action会被直接忽视掉，但{@link AsyncStream#whenEnd}添加的action会起作用</p>
  * <p>{@link AsyncStream#whenEnd}添加的action是用来在AsyncStream结束之后触发执行的，这些action可以要求消费事件，但不会回传事件（可以从{@link AsyncStream#whenEnd}的
  * 函数重载类型中看出，只有两种不会回传事件的Action）。</p>
- * <p>另外关于错误处理，通过{@link AsyncStream#exception(ExceptionHandler)}方法，设置一个统一的错误处理方法，当AsyncStream执行过程中发生错误时，将立即结束流，即{@link AsyncStream#isEnd}将返回true；也可以主动提交错误致使流结束{@link AsyncStream#onException(Throwable)}。</p>
+ * <p>另外关于错误处理，通过{@link AsyncStream#exception(ExceptionHandler)}方法，设置一个统一的错误处理方法，当AsyncStream执行过程中发生错误时，将立即结束流，即{@link
+ * AsyncStream#isEnd}将返回true；也可以主动提交错误致使流结束{@link AsyncStream#onException(Throwable)}。</p>
  */
 public class AsyncStream extends AsyncStreamAtomicRef {
     /*
@@ -60,9 +61,10 @@ public class AsyncStream extends AsyncStreamAtomicRef {
      *         true if no need to wait for one event to trigger engine processing
      */
     private AsyncStream(boolean isInstant) {
-        this.set_status(isInstant ? INSTANT : DEFERRED);
-        this.set_tick_mutex(false);
-        this.set_chainClosed(false);
+//        set_status(isInstant ? INSTANT : DEFERRED);
+        lazySet_status(isInstant ? INSTANT : DEFERRED);
+        set_tick_mutex(false);
+        set_chainClosed(false);
     }
 
     /**
@@ -285,7 +287,8 @@ public class AsyncStream extends AsyncStreamAtomicRef {
                 while (keep_tick_mutex_if(() -> get_status() == INSTANT && actions.notEmpty())) {
                     _Action action = actions.peek();
                     if (action == END) {
-                        set_status(FINISH);
+//                        set_status(FINISH);
+                        lazySet_status(FINISH);
                         continue outer;
                     } else if (!executeAction(actions))
                         return;
@@ -345,8 +348,8 @@ public class AsyncStream extends AsyncStreamAtomicRef {
             exceptionHandler.handle(e);
         else
             e.printStackTrace();
-        set_status(FINISH);//发生错误后，结束执行
-
+//        set_status(FINISH);//发生错误后，结束执行
+        lazySet_status(FINISH);
     }
 
     @CalledBySingleThread
@@ -379,8 +382,9 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     protected void wakeUp(Object returnFromAwait) {
         if (get_status() != AWAIT) return;//这种情况应该算是Exception
         if (returnFromAwait != null)
-            this.addFirst(returnFromAwait);
-        this.set_status(INSTANT);
-        this.onEvent();
+            addFirst(returnFromAwait);
+        set_status(INSTANT);
+        lazySet_status(INSTANT);
+        onEvent();
     }
 }

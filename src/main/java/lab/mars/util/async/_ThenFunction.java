@@ -18,7 +18,8 @@ public class _ThenFunction extends _Action {
     @Override protected void run(AsyncStream asyncStream) {
         Object result = thenFunction.run();
         if (result instanceof AsyncStream) {
-            asyncStream.set_status(AWAIT);
+//            asyncStream.set_status(AWAIT);
+            asyncStream.lazySet_status(AWAIT);
             AsyncStream anotherAsync = (AsyncStream) result;
             anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollRawEvent()));
         } else
