@@ -19,7 +19,7 @@ public class _ThenOnEventFunction extends _OnEventAction {
         Object result = thenOnEventFunction.onEvent(event);
         if (result instanceof AsyncStream) {
 //            asyncStream.set_status(AWAIT);
-            asyncStream.lazySet_status(AWAIT);
+            asyncStream.lazySet_status(AWAIT);//下面的whenEnd包含volatile write，所以此处可以使用lazySet
             AsyncStream anotherAsync = (AsyncStream) result;
             anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollRawEvent()));
         } else

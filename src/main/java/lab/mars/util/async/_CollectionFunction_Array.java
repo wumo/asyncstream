@@ -17,7 +17,7 @@ public class _CollectionFunction_Array extends _Action {
 
     @Override protected void run(AsyncStream asyncStream) {
 //        asyncStream.set_status(AWAIT);
-        asyncStream.lazySet_status(AWAIT);
+        asyncStream.lazySet_status(AWAIT);//下面的whenEnd包含volatile write，所以此处可以使用lazySet
         AtomicInteger count = new AtomicInteger(0);
         int size = asyncs.length;
         Object[] result = new Object[size];

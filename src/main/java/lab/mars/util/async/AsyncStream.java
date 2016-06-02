@@ -283,7 +283,7 @@ public class AsyncStream extends AsyncStreamAtomicRef {
                         && executeAction(whenEndChain)) ;
                 break;
             } else {
-                //只有没有任何阻碍的INSTANT mode才尝试执行action
+                //cas操作能够保证lazySet生效吗？
                 while (keep_tick_mutex_if(() -> get_status() == INSTANT && actions.notEmpty())) {
                     _Action action = actions.peek();
                     if (action == END) {
@@ -380,10 +380,10 @@ public class AsyncStream extends AsyncStreamAtomicRef {
     //awakeMe方法可能在另一线程中调用，但由于WhenAction或awaitAsync的语义使
     // 得不同的设置awaitMode之间存在happen-before关系，所以正确性并无问题
     protected void wakeUp(Object returnFromAwait) {
-        if (get_status() != AWAIT) return;//这种情况应该算是Exception
+//        if (get_status() != AWAIT) return;//这种情况应该算是Exception
         if (returnFromAwait != null)
             addFirst(returnFromAwait);
-        set_status(INSTANT);
+//        set_status(INSTANT);
         lazySet_status(INSTANT);
         onEvent();
     }

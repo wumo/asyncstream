@@ -17,7 +17,7 @@ public class _AwaitAsyncStream extends _Action {
 
     @Override protected void run(AsyncStream asyncStream) throws Exception {
 //        asyncStream.set_status(AWAIT);
-        asyncStream.lazySet_status(AWAIT);
+        asyncStream.lazySet_status(AWAIT);//下面的whenEnd包含volatile write，所以此处可以使用lazySet
         anotherAsync.whenEnd(() -> asyncStream.wakeUp(anotherAsync.pollRawEvent()));
     }
 }
