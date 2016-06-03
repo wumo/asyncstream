@@ -146,7 +146,7 @@ AsyncTest2.test              8  avgt   10  2799.674 ±  27.635  us/op
     public static void main(String[] args) throws RunnerException, InterruptedException {
         Options opt = new OptionsBuilder()
                 .include(AsyncTest2.class.getSimpleName())
-                .jvmArgsPrepend("-XX:-RestrictContended")
+                .jvmArgsPrepend("-XX:-RestrictContended -XX:+PrintCompilation")
                 .threads(1)
                 .forks(1)
                 .timeUnit(TimeUnit.MICROSECONDS)

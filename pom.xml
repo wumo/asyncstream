@@ -10,6 +10,7 @@
     <packaging>bundle</packaging>
 
     <properties>
+        <special-queue.version>1.0</special-queue.version>
         <osgi.version>6.0.0</osgi.version>
         <jmh.version>1.12</jmh.version>
         <junit.version>4.11</junit.version>
@@ -24,7 +25,7 @@
             <dependency>
                 <groupId>lab.mars</groupId>
                 <artifactId>special-queue</artifactId>
-                <version>1.0</version>
+                <version>${special-queue.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.osgi</groupId>
